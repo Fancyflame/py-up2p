@@ -1,4 +1,4 @@
-#                                                                                            
+#                                                                                                           
 from protocol import *
 from socket import *
 from time import sleep
@@ -52,6 +52,10 @@ class up2psocket(event_manager):
         if address==None:address=self._addr
         if type(proto)!=up2pproto:
             proto=up2pproto(proto)
+        """addr=(
+            address[0] if address[0] else "127.0.0.1",
+            address[1] if address[1] else 5557
+        )"""
         self._s.sendto(proto.toBytes(),address)
     
     def getRemoteInfo(self):
@@ -60,7 +64,6 @@ class up2psocket(event_manager):
             "method":"getouteraddr",
         })
         p=self.waitfor("data")[0]
-        print(self._addr,self._s.getsockname())
         self.outerAddr=p.i("outeraddress")
         if self.natlvl!=None:return
         self.sendp({
@@ -73,96 +76,107 @@ class up2psocket(event_manager):
         if self.died:return
         self._s.close()
         self.died=True
+        self.trigger("close")
     
     #方法需重写
     def accept(self):
         pass
 
 class client(up2psocket):
-    peer=None #连接端
-    def run(self,destination,tryTimes=30):
+    _peer=None #连接端
+    def run(self,destination):
         self._s.bind(("",0))
         self.getRemoteInfo()
-        
-        #请求连接
-        self.sendp({
-            "method":"connect",
-            "destination":destination,
-            "natlvl":self.natlvl,
-            "ack":False
-        })
-        
-        #因为内网穿透需要快速，所以请求对方地址
-        #和穿透一定要在最后
-        
-        #接收远程主机的连接
-        while True:
-            p=self.waitfor("data")[0]
-            m=p.i("method")
-            #来这么一出是防止恶意refuse
-            if m=="refuseconnect" and p.i("from")==destination:
-                raise up2pRequestErr("Connect refused by remote host")
-            elif m=="response" and p.i("ok")==False:
-                raise up2pRequestErr(p.i("reason"))
-            elif m=="connect":
-                raddr=p.i("from")
-                rnat=p.i("natlvl")
-                if not p.i("ack"):
-                    #如果不是确认包，那就发送确认包
-                    #一般是由host的client发送无ack包
-                    self.sendp({
-                        "method":"connect",
-                        "destination":raddr,
-                        "natlvl":self.natlvl,
-                        "ack":True
-                    })
-                    sleep(0.01) #等对方收到
-                break
-        
-        #开始打洞！
-        #print("目标地址",raddr,"对方nat",rnat)
-        tt=tryTimes
-        connected=False #打洞地址
-        
-        def ln(p,ad):
-            nonlocal connected
-            if p.i("method")=="handshake" and ad[0]==raddr[0]:
-                connected=(p,ad)
-                self.off("data",ln)
-        self.on("data",ln)
-        
-        for i in sorted(range(-tryTimes,tryTimes+1),key=lambda n:abs(n),reverse=True):
-            if connected:
-                break
-            #如果对方nat是0，就直接往目标端口发包
-            if rnat==0:ra=raddr
-            else:
-                #对称型网关，需要强拆
-                rge=20 #随机端口大致半径
-                rnd=raddr[1]+random.randint(-rge,rge)
-                #一般不会出现这种情况吧
-                rnd=0xffff if rnd>0xffff else rnd
-                ra=(raddr[0],rnd)
+        self._peer=destination
+    
+    def drill(self,tryTimes=30):
+        def dri():
+            destination=self._peer
+            #请求连接
+            self.sendp({
+                "method":"connect",
+                "destination":destination,
+                "natlvl":self.natlvl,
+                "ack":False
+            })
+            #因为内网穿透需要快速，所以请求对方地址
+            #和穿透一定要在最后
             
-            for i in range(2):
+            #接收远程主机的连接
+            while True:
+                p=self.waitfor("data")[0]
+                m=p.i("method")
+                #来这么一出是防止恶意refuse
+                if m=="refuseconnect" and p.i("from")==destination:
+                    raise up2pRequestErr("Connect refused by remote host")
+                elif m=="response" and p.i("ok")==False:
+                    raise up2pRequestErr(p.i("reason"))
+                elif m=="connect":
+                    raddr=p.i("from")
+                    rnat=p.i("natlvl")
+                    if not p.i("ack"):
+                        #如果不是确认包，那就发送确认包
+                        #一般是由host的client发送无ack包
+                        self.sendp({
+                            "method":"connect",
+                            "destination":raddr,
+                            "natlvl":self.natlvl,
+                            "ack":True
+                        })
+                        sleep(0.01) #等对方收到
+                    break
+            
+            #开始打洞！
+            tt=tryTimes
+            connected=False #打洞地址
+            #检测是否连上
+            def ln(p,ad):
+                nonlocal connected
+                if p.i("method")=="handshake" and ad[0]==raddr[0]:
+                    connected=(p,ad)
+                    self.off("data",ln)
+            self.on("data",ln)
+            
+            ports=[]
+            for i in range(tryTimes):
+                foo=int(random.normalvariate(0,tryTimes//5))
+                if foo==0:foo=1
+                ports.append(foo)
+            #sorted(range(-tryTimes,tryTimes+1),key=lambda n:abs(n),reverse=True):
+            #主动发包{
+            for i in ports:
+                if connected:
+                    break
+                #如果对方nat是0，就直接往目标端口发包
+                if rnat==0:ra=raddr
+                else:
+                    #对称型网关，需要强拆
+                    rge=20 #随机端口大致半径
+                    rnd=raddr[1]+random.randint(-rge,rge)
+                    #一般不会出现这种情况吧
+                    rnd=0xffff if rnd>0xffff else rnd
+                    ra=(raddr[0],rnd)
+                
+                for i in range(2):
+                    self.sendp({
+                        "method":"handshake",
+                        "ack":False
+                    },ra)
+                    sleep(0.01) #稍微间隔一下，不然被运营商ban了可就不妙了
+            else:
+                while True:
+                    if connected:break
+                    sleep(0.01)
+            p,ad=connected
+            if p.i("ack")==False:
+                #需要给予对方确认
                 self.sendp({
                     "method":"handshake",
-                    "ack":False
-                },ra)
-                sleep(0.01) #稍微间隔一下，不然被运营商ban了可就不妙了
-        else:
-            while True:
-                if connected:break
-                sleep(0.01)
-        p,ad=connected
-        if p.i("ack")==False:
-            #需要给予对方确认
-            self.sendp({
-                "method":"handshake",
-                "ack":True
-            })
-        self.peer=connected
-        self.trigger("connect")
+                    "ack":True
+                })
+            self.peer=connected
+            self.trigger("connect")
+        self.add_thread(dri)
 
 class host(up2psocket):
     _timer_ping=None #心跳协程
@@ -191,13 +205,6 @@ class host(up2psocket):
                 })
                 sleep(20)
         self.add_thread(heartbeat)
-        
-        #获取外部地址信息
-        self.sendp({
-            "method":"getouteraddr"
-        })
-        self.outerAddr=self.waitfor("data")[0].i("outeraddress")
-        
     def listen(self):
         def loop(p,ad):
             m=p.i("method")
@@ -207,7 +214,7 @@ class host(up2psocket):
                 if self.accept(p.i("from"))==False:return
                 def foo():
                     c=client(self._addr)
-                    c.run(p.i("from"))
+                    self.trigger("client",c,p.i("from"))
                 self.add_thread(foo)
         self.on("data",loop)
     
@@ -230,6 +237,7 @@ class server(up2psocket):
         #ns是nat检测服务器
         self._ns=up2psocket((self._addr[0],0))
         self._ns._s.bind((self._addr[0],0))
+        self.outerAddr=self._s.getsockname()
     
     def listen(self):
         #nat检测站的端口
@@ -333,6 +341,7 @@ class server(up2psocket):
         self._ns.close()
         super().close()
 
+"""
 def run(ty,*args):
     print("线程启动")
     k=ty(("",5557))
@@ -360,3 +369,4 @@ while True:
         print("\nbye")
         th.Timer(0.5,lambda:print(th.enumerate())).start()
         break
+"""
