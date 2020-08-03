@@ -8,6 +8,7 @@ ty=ar[0] #类型
 addr=("123.207.9.213",ar[1] if ar[1].isdigit() else \
     ar[2] if ar[2].isdigit() else 5557) #地址
 if ty=="s":
+    addr=("",addr[1])
     k=server(addr)
     k.run()
     k.listen()
