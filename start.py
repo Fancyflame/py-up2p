@@ -21,21 +21,23 @@ elif ty=="h":
     def cnt(c,a):
         print("有客户端尝试连接",a)
         c.run(a)
-        c.drill()
+        c.punching()
         def foo():
             print("对接成功")
             c.close()
         c.on("connect",foo)
+        c.on("error",lambda:print("等待超时"))
     k.on("client",cnt)
 elif ty=="c":
     k=client(addr)
     k.run(ar[1])
     print("外部地址为：",k.outerAddr)
-    k.drill()
+    k.punching()
     def foo():
         print("对接成功")
         k.close()
     k.on("connect",foo)
+    c.on("error",lambda:print("等待超时"))
 else:
     print("未知类型：",ty)
     sys.exit()

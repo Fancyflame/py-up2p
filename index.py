@@ -89,7 +89,7 @@ class client(up2psocket):
         self.getRemoteInfo()
         self._peer=destination
     
-    def drill(self,tryTimes=30):
+    def punching(self,tryTimes=50):
         def dri():
             destination=self._peer
             #请求连接
@@ -102,6 +102,9 @@ class client(up2psocket):
             #因为内网穿透需要快速，所以请求对方地址
             #和穿透一定要在最后
             
+            #主动响应。指后面发包过程中，数据包发往小范围端口
+            #如果是False则为“被阻拦”方，往随机端口发包
+            positive=False
             #接收远程主机的连接
             while True:
                 p=self.waitfor("data")[0]
@@ -123,11 +126,12 @@ class client(up2psocket):
                             "natlvl":self.natlvl,
                             "ack":True
                         })
+                        #先收到数据包的为主动，约定而已
+                        positive=True
                         sleep(0.01) #等对方收到
                     break
             
             #开始打洞！
-            tt=tryTimes
             connected=False #打洞地址
             #检测是否连上
             def ln(p,ad):
@@ -137,11 +141,17 @@ class client(up2psocket):
                     self.off("data",ln)
             self.on("data",ln)
             
-            ports=[]
-            for i in range(tryTimes):
-                foo=int(random.normalvariate(0,tryTimes//5))
+            if positive:
+                #小范围拦截
+                ports=random.choices(range(tryTimes//2-4,tryTimes//2),k=tryTimes)
+            else:
+                #大范围撒网
+                ports=random.choices(range(-tryTimes//2,tryTimes//2),k=tryTimes)
+            """for i in range(tryTimes):
+                foo=int(random.normalvariate(tryTimes*14//15,tryTimes//15))
                 if foo==0:foo=1
-                ports.append(foo)
+                ports.append(foo)"""
+            
             #sorted(range(-tryTimes,tryTimes+1),key=lambda n:abs(n),reverse=True):
             #主动发包{
             for i in ports:
@@ -150,23 +160,31 @@ class client(up2psocket):
                 #如果对方nat是0，就直接往目标端口发包
                 if rnat==0:ra=raddr
                 else:
-                    #对称型网关，需要强拆
-                    rge=20 #随机端口大致半径
-                    rnd=raddr[1]+random.randint(-rge,rge)
-                    #一般不会出现这种情况吧
+                    rnd=i+raddr[1]
+                    print(rnd)
                     rnd=0xffff if rnd>0xffff else rnd
                     ra=(raddr[0],rnd)
                 
-                for i in range(2):
+                for ii in range(2):
                     self.sendp({
                         "method":"handshake",
                         "ack":False
                     },ra)
-                    sleep(0.01) #稍微间隔一下，不然被运营商ban了可就不妙了
+                    sleep(0.1) #稍微间隔一下，不然被运营商ban了可就不妙了
             else:
+                def timer():
+                    nonlocal connected
+                    if not connected:
+                        connected="timeout"
+                th.Timer(2,timer)
                 while True:
                     if connected:break
-                    sleep(0.01)
+                    sleep(0.02)
+            
+            if connected=="timeout":
+                self.trigger("error",up2pRequestError(
+                    "Cannot go through the nat, please try again"))
+                return
             p,ad=connected
             if p.i("ack")==False:
                 #需要给予对方确认
@@ -231,13 +249,23 @@ class host(up2psocket):
 #中央处理服务器
 class server(up2psocket):
     domains=None
+    _kill_domains=None
     def run(self):
         self.domains=dict()
+        self._kill_domains=dict()
         self._s.bind(self._addr)
         #ns是nat检测服务器
         self._ns=up2psocket((self._addr[0],0))
         self._ns._s.bind((self._addr[0],0))
         self.outerAddr=self._s.getsockname()
+        
+        #定时清理死亡主机
+        def cleaner():
+            sleep(25)
+            for i in self._kill_domains.keys():
+                del self.domains[i]
+            self._kill_domains=self.domains.copy()
+        self.loop(cleaner)
     
     def listen(self):
         #nat检测站的端口
@@ -307,7 +335,11 @@ class server(up2psocket):
                 },ad)
             elif m=="ping":
                 #心跳包
-                pass
+                dom=p.i("domain")
+                k=self._kill_domains
+                if dom in k and (k[dom]==ad):
+                    #需要验证地址是否正确
+                    del k[dom]
             elif m=="connect":
                 #请求连接
                 if not getDes():return
@@ -327,8 +359,11 @@ class server(up2psocket):
             elif m=="close":
                 #删除域名映射
                 d=p.i("domain")
-                if d in self.domains:
+                try:
                     del self.domains[d]
+                    del self._kill_domains[d]
+                except:
+                    pass
             else:
                 #未知方法
                 self.sendp({
