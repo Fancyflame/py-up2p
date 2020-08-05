@@ -1,6 +1,8 @@
 #ug ug  gy gh ghu ghu                    ,  b  b  b b b b b kgc jg j vhv  vhjv h v hvh vh vvh vh  vhv h hv
 from random import *
 from time import sleep
+
+itrp=0.1 #外部打扰概率
 class nat:
     def __init__(self,rge=range(20000,50000)):
         """
@@ -16,7 +18,7 @@ class nat:
         #内部端口对应外部端口
         self._map[str(self._oft)]=port
         self._oft+=1
-        #if random()>0.9:self._oft+=1
+        if random()<itrp:self._oft+=1
         return r
     def recv(self,sp,dp):
         m=self._map.get(str(dp))
@@ -36,11 +38,11 @@ def test():
         if B.send(A,A.last+p2[i]):suc+=1
     return suc
 
-total=300
+total=2300
 ok=0
 for i in range(total):
     n=test()
     if n:ok+=1
     #print("第"+str(i+1)+"次实验中，成功了"+str(n)+"次")
-print(str(total)+"次实验中，成功概率"+str(ok*100//total)+"%")
-print("end")
+print(str(total)+"次外部打扰概率设置为"+str(itrp*100)+ \
+    "%的实验中，成功概率"+str(ok*100//total)+"%")

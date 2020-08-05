@@ -157,12 +157,12 @@ class client(up2psocket):
                     rnd=0xffff if rnd>0xffff else rnd
                     ra=(raddr[0],rnd)
                 
-                for ii in range(2):
+                for ii in range(1):
                     self.sendp({
                         "method":"handshake",
                         "ack":False
                     },ra)
-                    sleep(0.07) #稍微间隔一下，不然被运营商ban了可就不妙了
+                    sleep(0.05) #稍微间隔一下，不然被运营商ban了可就不妙了
             else:
                 def timer():
                     nonlocal connected
@@ -175,7 +175,7 @@ class client(up2psocket):
             
             if connected=="timeout":
                 self.trigger("error",up2pRequestError(
-                    "Cannot go through the nat, please try again"))
+                    "Cannot get through the nat, please try again"))
                 return
             p,ad=connected
             if p.i("ack")==False:

@@ -25,7 +25,7 @@ elif ty=="h":
         c.run(a)
         c.punching()
         def foo():
-            print("对接成功")
+            print("对接成功辣！")
             c.close()
         c.on("connect",foo)
         c.on("error",lambda:print("等待超时"))
@@ -37,7 +37,7 @@ elif ty=="c":
         "nat等级：",k.natlvl)
     k.punching()
     def foo():
-        print("对接成功")
+        print("对接成功辣！")
         k.close()
     k.on("connect",foo)
     k.on("error",lambda:print("等待超时"))
