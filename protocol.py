@@ -7,7 +7,8 @@ class up2pProtoErr(Exception):
     pass
 _up2pproto__keys=(
     "method","ok","reason","domain","destination",
-    "ping","outeraddress","from","natport","natlvl"
+    "ping","outeraddress","from","natport","natlvl",
+    "scanrange"
 )
 _up2pproto__vtypes=(
     "string","number","bool","addr","bytes"
@@ -150,6 +151,13 @@ class up2pproto:
                 b.append(leng)
                 b+=v
         return b
+    
+    def copy(self,upd=None):
+        p=up2pproto()
+        p._dict=self._dict.copy()
+        if upd!=None:
+            p._dict.update(upd)
+        return p
 """
 v=up2pproto()
 v.i({

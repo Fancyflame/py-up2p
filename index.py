@@ -3,8 +3,8 @@ from protocol import *
 from socket import *
 from time import sleep
 import threading as th
-#import asyncio as ai
 import random
+import math
 #import re
 #import traceback
 from asyncevent import *
@@ -93,12 +93,14 @@ class client(up2psocket):
         def dri():
             destination=self._peer
             #请求连接
-            self.sendp({
+            CONN_PACK={
                 "method":"connect",
                 "destination":destination,
                 "natlvl":self.natlvl,
+                "scanrange":tryTimes,
                 "ack":False
-            })
+            }
+            self.sendp(CONN_PACK)
             #因为内网穿透需要快速，所以请求对方地址
             #和穿透一定要在最后
             
@@ -120,14 +122,10 @@ class client(up2psocket):
                     if not p.i("ack"):
                         #如果不是确认包，那就发送确认包
                         #一般是由host的client发送无ack包
-                        self.sendp({
-                            "method":"connect",
-                            "destination":raddr,
-                            "natlvl":self.natlvl,
-                            "ack":True
-                        })
+                        CONN_PACK["ack"]=True
+                        self.sendp(CONN_PACK)
                         #先收到数据包的为主动，约定而已
-                        positive=True
+                        #positive=True
                         sleep(0.01) #等对方收到
                     break
             
@@ -140,18 +138,7 @@ class client(up2psocket):
                     connected=(p,ad)
                     self.off("data",ln)
             self.on("data",ln)
-            
-            if positive:
-                #小范围拦截
-                ports=random.choices(range(tryTimes//2-4,tryTimes//2),k=tryTimes)
-            else:
-                #大范围撒网
-                ports=random.choices(range(-tryTimes//2,tryTimes//2),k=tryTimes)
-            """for i in range(tryTimes):
-                foo=int(random.normalvariate(tryTimes*14//15,tryTimes//15))
-                if foo==0:foo=1
-                ports.append(foo)"""
-            
+            ports=(p.i("scanrange")//2+1,)*tryTimes
             #sorted(range(-tryTimes,tryTimes+1),key=lambda n:abs(n),reverse=True):
             #主动发包{
             for i in ports:
@@ -170,7 +157,7 @@ class client(up2psocket):
                         "method":"handshake",
                         "ack":False
                     },ra)
-                    sleep(0.1) #稍微间隔一下，不然被运营商ban了可就不妙了
+                    sleep(0.07) #稍微间隔一下，不然被运营商ban了可就不妙了
             else:
                 def timer():
                     nonlocal connected
@@ -232,7 +219,20 @@ class host(up2psocket):
                 if self.accept(p.i("from"))==False:return
                 def foo():
                     c=client(self._addr)
-                    self.trigger("client",c,p.i("from"))
+                    rejected=False
+                    #拒绝连接
+                    def rej():
+                        if rejected:
+                            raise up2pSocketError("Only can reject one time")
+                        self.sendp({
+                            "method":"refuseconnect",
+                            "destination":ad
+                        })
+                    self.trigger("client",{
+                        client:c,
+                        rinfo:p.i("from"),
+                        reject:rej
+                    })
                 self.add_thread(foo)
         self.on("data",loop)
     
@@ -347,7 +347,8 @@ class server(up2psocket):
                     "method":"connect",
                     "from":ad,
                     "ack":p.i("ack"),
-                    "natlvl":p.i("natlvl")
+                    "natlvl":p.i("natlvl"),
+                    "scanrange":p.i("scanrange")
                 },des)
             elif m=="refuseconnect":
                 #拒绝连接

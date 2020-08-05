@@ -16,9 +16,10 @@ if ty=="s":
 elif ty=="h":
     k=host(addr)
     k.run(ar[1])
-    print("外部地址为：",k.outerAddr)
+    print("外部地址为：",k.outerAddr,
+        "nat等级：",k.natlvl)
     k.listen()
-    def cnt(c,a):
+    def cnt(c,a,reject):
         print("有客户端尝试连接",a)
         c.run(a)
         c.punching()
@@ -31,13 +32,14 @@ elif ty=="h":
 elif ty=="c":
     k=client(addr)
     k.run(ar[1])
-    print("外部地址为：",k.outerAddr)
+    print("外部地址为：",k.outerAddr,
+        "nat等级：",k.natlvl)
     k.punching()
     def foo():
         print("对接成功")
         k.close()
     k.on("connect",foo)
-    c.on("error",lambda:print("等待超时"))
+    k.on("error",lambda:print("等待超时"))
 else:
     print("未知类型：",ty)
     sys.exit()
