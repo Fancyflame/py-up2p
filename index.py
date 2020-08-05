@@ -57,6 +57,7 @@ class up2psocket(event_manager):
             address[1] if address[1] else 5557
         )"""
         self._s.sendto(proto.toBytes(),address)
+        #if proto.i("method")!="handshake":print(proto.i("method"))
     
     def getRemoteInfo(self):
         #获取外部地址信息以及nat类型
@@ -93,20 +94,20 @@ class client(up2psocket):
         def dri():
             destination=self._peer
             #请求连接
-            CONN_PACK={
+            CONN_PACK=up2pproto({
                 "method":"connect",
                 "destination":destination,
                 "natlvl":self.natlvl,
                 "scanrange":tryTimes,
                 "ack":False
-            }
+            })
             self.sendp(CONN_PACK)
             #因为内网穿透需要快速，所以请求对方地址
             #和穿透一定要在最后
             
             #主动响应。指后面发包过程中，数据包发往小范围端口
             #如果是False则为“被阻拦”方，往随机端口发包
-            positive=False
+            #positive=False
             #接收远程主机的连接
             while True:
                 p=self.waitfor("data")[0]
@@ -117,13 +118,17 @@ class client(up2psocket):
                 elif m=="response" and p.i("ok")==False:
                     raise up2pRequestErr(p.i("reason"))
                 elif m=="connect":
+                    print("收到")
                     raddr=p.i("from")
                     rnat=p.i("natlvl")
                     if not p.i("ack"):
                         #如果不是确认包，那就发送确认包
                         #一般是由host的client发送无ack包
-                        CONN_PACK["ack"]=True
-                        self.sendp(CONN_PACK)
+                        pack=CONN_PACK.copy({
+                            "ack":True,
+                            "destination":raddr
+                        })
+                        self.sendp(pack)
                         #先收到数据包的为主动，约定而已
                         #positive=True
                         sleep(0.01) #等对方收到
@@ -206,10 +211,11 @@ class host(up2psocket):
             while True:
                 if self.died:break
                 self.sendp({
-                    "method":"ping"
+                    "method":"heartbeat",
+                    "domain":domain
                 })
-                sleep(20)
-        self.add_thread(heartbeat)
+                sleep(10)
+        if domain:self.add_thread(heartbeat)
     def listen(self):
         def loop(p,ad):
             m=p.i("method")
@@ -226,13 +232,9 @@ class host(up2psocket):
                             raise up2pSocketError("Only can reject one time")
                         self.sendp({
                             "method":"refuseconnect",
-                            "destination":ad
+                            "destination":p.i("from")
                         })
-                    self.trigger("client",{
-                        client:c,
-                        rinfo:p.i("from"),
-                        reject:rej
-                    })
+                    self.trigger("client",c,p.i("from"),rej)
                 self.add_thread(foo)
         self.on("data",loop)
     
@@ -261,7 +263,7 @@ class server(up2psocket):
         
         #定时清理死亡主机
         def cleaner():
-            sleep(25)
+            sleep(15)
             for i in self._kill_domains.keys():
                 del self.domains[i]
             self._kill_domains=self.domains.copy()
@@ -333,7 +335,7 @@ class server(up2psocket):
                     "outeraddress":ad,
                     "natport":nattestport
                 },ad)
-            elif m=="ping":
+            elif m=="heartbeat":
                 #心跳包
                 dom=p.i("domain")
                 k=self._kill_domains

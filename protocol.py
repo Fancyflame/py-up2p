@@ -8,13 +8,13 @@ class up2pProtoErr(Exception):
 _up2pproto__keys=(
     "method","ok","reason","domain","destination",
     "ping","outeraddress","from","natport","natlvl",
-    "scanrange"
+    "scanrange","identifier"
 )
 _up2pproto__vtypes=(
     "string","number","bool","addr","bytes"
 )
 _up2pproto__methods=(
-    "response","domain","getouteraddr","ping",
+    "response","domain","getouteraddr","heartbeat",
     "connect","refuseconnect","close","handshake"
 )
 _up2pproto__iden=bytes((0x40, 0x83, 0xf4, 0xdc))
@@ -151,12 +151,12 @@ class up2pproto:
                 b.append(leng)
                 b+=v
         return b
-    
     def copy(self,upd=None):
+        """复制当前对象并选择覆盖副本"""
         p=up2pproto()
         p._dict=self._dict.copy()
         if upd!=None:
-            p._dict.update(upd)
+            p.i(upd)
         return p
 """
 v=up2pproto()

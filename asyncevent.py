@@ -10,6 +10,9 @@ def _event_manager__newth(func,args=(),daemon=True):
 class StopLoop(Exception):
     def __init__(self):
         super().__init__("Exit the loop")
+class EventManagerTimeoutError(Exception):
+    def __init__(self):
+        super().__init__("Wait timeout")
 
 class event_manager:
     _listeners=None

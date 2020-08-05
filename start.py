@@ -5,7 +5,8 @@ from time import sleep
 ar=sys.argv[1:]
 ar+=("" for i in range(3-len(ar))) #填充长度至3
 ty=ar[0] #类型
-addr=("123.207.9.213",ar[1] if ar[1].isdigit() else \
+IP="123.207.9.213" if 1 else "127.0.0.1"
+addr=(IP,ar[1] if ar[1].isdigit() else \
     ar[2] if ar[2].isdigit() else 5557) #地址
 if ty=="s":
     addr=("",addr[1])
