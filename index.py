@@ -157,7 +157,7 @@ class client(up2psocket):
                     rnd=0xffff if rnd>0xffff else rnd
                     ra=(raddr[0],rnd)
                 
-                for ii in range(1):
+                for ii in range(2):
                     self.sendp({
                         "method":"handshake",
                         "ack":False
@@ -311,7 +311,7 @@ class server(up2psocket):
                             "ok":False,
                             "reason":"Cannot find any host"+\
                                 "match to the domain:"+des
-                        })
+                        },ad)
                         return False
                 return True
             
@@ -369,6 +369,9 @@ class server(up2psocket):
                     pass
             else:
                 #未知方法
+                if ad==self.outerAddr:
+                    print("出现自循环！")
+                    return
                 self.sendp({
                     "ok":False,
                     "reason":"Unknown request method:"+m
