@@ -9,8 +9,8 @@ def _event_manager__newth(func,args=(),daemon=True):
 
 class StopLoop(Exception):
     def __init__(self):
-        super().__init__("Exit the loop")
-class EventManagerTimeoutError(Exception):
+        super().__init__("Exit the loop. This error should be caught.")
+class TimeoutError(Exception):
     def __init__(self):
         super().__init__("Wait timeout")
 
@@ -38,10 +38,9 @@ class event_manager:
     
     def __init__(self):
         """初始化"""
-        self._listeners=dict()
         self._queue=[]
         self._joiners=[]
-        self._event=th.Event()
+        self._events={} #塞 事件名:(事件对象,[监听器]) 键值对
         self._work=th.Event()
         
         #执行监听函数
@@ -61,17 +60,18 @@ class event_manager:
                 self._joiners.clear()
                 
                 #处理事件
-                l=self._listeners
+                e=self._events
                 for i in q:
                     #队列里激活的事件
-                    #激活的事件没有监听者
-                    if i[0] not in l:continue
-                    for f in l[i[0]][:]:
+                    #事件里没有监听者
+                    if i[0] not in e:continue
+                    ev=e[i[0]]
+                    for f in ev[1][:]:
                         #每个监听函数
                         f(*i[1])
                     #提示所有事件处理完毕
-                    self._event.set()
-                    self._event.clear()
+                    ev[0].set()
+                    ev[0].clear()
                 q.clear()
                 
                 if self.exit:
@@ -80,17 +80,17 @@ class event_manager:
     
     def on(self,name,func):
         """监听事件"""
-        l=self._listeners
-        if not name in l:
-            l[name]=[]
-        l[name].append(func)
+        e=self._events
+        if not name in e:
+            e[name]=(th.Event(),[])
+        e[name][1].append(func)
     
     def off(self,name,func):
         """取消监听事件"""
-        l=self._listeners
+        e=self._events
         try:
             #懒得给你判断，用try直接莽
-            l[name].remove(func)
+            e[name][1].remove(func)
         except:
             pass
     
@@ -128,7 +128,7 @@ class event_manager:
         self._queue.append((name,args))
         self._work.set()
     
-    def waitfor(self,name):
+    def waitfor(self,name,timeout=None):
         """阻塞线程等待事件触发"""
         triggered=False #已触发事件
         a=()
@@ -139,7 +139,8 @@ class event_manager:
             triggered=True
         self.once(name,proxy)
         while True:
-            self._event.wait()
+            if not self._events[name][0].wait(timeout):
+                raise TimeoutError()
             if triggered:return a
     
     def end_loop(self):

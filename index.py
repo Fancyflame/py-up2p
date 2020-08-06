@@ -9,9 +9,9 @@ import math
 #import traceback
 from asyncevent import *
 
-class up2pSocketErr(Exception):
+class up2pSocketError(Exception):
     pass
-class up2pRequestErr(Exception):
+class up2pRequestError(Exception):
     pass
 
 def launchTh(func,*args,daemon=True):
@@ -64,7 +64,11 @@ class up2psocket(event_manager):
         self.sendp({
             "method":"getouteraddr",
         })
-        p=self.waitfor("data")[0]
+        try:
+            p=self.waitfor("data",4)[0]
+        except TimeoutError:
+            raise up2pRequestError("Received nothing from the server ("+\
+                ":".join(str(x) for x in self._addr)+") before timeout")
         self.outerAddr=p.i("outeraddress")
         if self.natlvl!=None:return
         self.sendp({
@@ -90,7 +94,7 @@ class client(up2psocket):
         self.getRemoteInfo()
         self._peer=destination
     
-    def punching(self,tryTimes=50):
+    def punching(self,tryTimes=40):
         def dri():
             destination=self._peer
             #请求连接
@@ -114,9 +118,9 @@ class client(up2psocket):
                 m=p.i("method")
                 #来这么一出是防止恶意refuse
                 if m=="refuseconnect" and p.i("from")==destination:
-                    raise up2pRequestErr("Connect refused by remote host")
+                    raise up2pRequestError("Connect refused by remote host")
                 elif m=="response" and p.i("ok")==False:
-                    raise up2pRequestErr(p.i("reason"))
+                    raise up2pRequestError(p.i("reason"))
                 elif m=="connect":
                     print("收到")
                     raddr=p.i("from")
@@ -146,6 +150,7 @@ class client(up2psocket):
             ports=(p.i("scanrange")//2+1,)*tryTimes
             #sorted(range(-tryTimes,tryTimes+1),key=lambda n:abs(n),reverse=True):
             #主动发包{
+            print("对方nat等级",rnat,"准备打洞")
             for i in ports:
                 if connected:
                     break
@@ -153,7 +158,6 @@ class client(up2psocket):
                 if rnat==0:ra=raddr
                 else:
                     rnd=i+raddr[1]
-                    print(rnd)
                     rnd=0xffff if rnd>0xffff else rnd
                     ra=(raddr[0],rnd)
                 
@@ -164,19 +168,12 @@ class client(up2psocket):
                     },ra)
                     sleep(0.05) #稍微间隔一下，不然被运营商ban了可就不妙了
             else:
-                def timer():
-                    nonlocal connected
-                    if not connected:
-                        connected="timeout"
-                th.Timer(2,timer)
-                while True:
-                    if connected:break
-                    sleep(0.02)
-            
-            if connected=="timeout":
-                self.trigger("error",up2pRequestError(
-                    "Cannot get through the nat, please try again"))
-                return
+                try:
+                    self.waitfor("data",3)
+                except TimeoutError:
+                    raise up2pRequestError(
+                        "Cannot get through the nat, please try again"
+                    )
             p,ad=connected
             if p.i("ack")==False:
                 #需要给予对方确认
@@ -203,7 +200,7 @@ class host(up2psocket):
             })
             p=self.waitfor("data")[0]
             if not p.i("ok"):
-                raise up2pRequestErr("domain request error")
+                raise up2pRequestError("domain request error")
             self.domain=domain
         
         #启动心跳
@@ -274,6 +271,7 @@ class server(up2psocket):
         nattestport=self._ns._s.getsockname()[1]
         #nat检测服务器
         def ln(p,ad):
+            print(233)
             n=self._ns
             m=p.i("method")
             if m=="getouteraddr":
