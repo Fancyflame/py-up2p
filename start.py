@@ -18,7 +18,7 @@ elif ty=="h":
     k=host(addr)
     k.run(ar[1])
     print("外部地址为：",k.outerAddr,
-        "nat等级：",k.natlvl)
+        "端口跳跃：",k.leapgap)
     k.listen()
     def cnt(c,a,reject):
         print("有客户端尝试连接",a)
@@ -34,7 +34,7 @@ elif ty=="c":
     k=client(addr)
     k.run(ar[1])
     print("外部地址为：",k.outerAddr,
-        "nat等级：",k.natlvl)
+        "端口跳跃：",k.leapgap)
     k.punching()
     def foo():
         print("对接成功辣！")

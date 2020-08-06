@@ -7,7 +7,7 @@ class up2pProtoErr(Exception):
     pass
 _up2pproto__keys=(
     "method","ok","reason","domain","destination",
-    "ping","outeraddress","from","natport","natlvl",
+    "ping","outeraddress","from","natport","leapgap",
     "scanrange","identifier"
 )
 _up2pproto__vtypes=(
