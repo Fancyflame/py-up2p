@@ -147,7 +147,7 @@ class client(up2psocket):
                     connected=(p,ad)
                     self.off("data",ln)
             self.on("data",ln)
-            ports=(p.i("scanrange")//2+1,)*tryTimes
+            ports=(p.i("scanrange")//2,)*tryTimes
             #sorted(range(-tryTimes,tryTimes+1),key=lambda n:abs(n),reverse=True):
             #主动发包{
             print("对方nat等级",rnat,"准备打洞")
@@ -174,7 +174,7 @@ class client(up2psocket):
                     raise up2pRequestError(
                         "Cannot get through the nat, please try again"
                     )
-            p,ad=connected
+            (p,ad)=connected
             if p.i("ack")==False:
                 #需要给予对方确认
                 self.sendp({
@@ -288,7 +288,7 @@ class server(up2psocket):
                 },ad)
         self._ns.on("data",ln)
         
-        def ln(p,ad):
+        def ln2(p,ad):
             try:
                 m=p.i("method")
             except:
@@ -374,7 +374,7 @@ class server(up2psocket):
                     "ok":False,
                     "reason":"Unknown request method:"+m
                 },ad)
-        self.on("data",ln)
+        self.on("data",ln2)
     
     def close(self):
         self._ns.close()

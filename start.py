@@ -26,7 +26,7 @@ elif ty=="h":
         c.punching()
         def foo():
             print("对接成功辣！")
-            c.close()
+            #c.close()
         c.on("connect",foo)
         c.on("error",lambda:print("等待超时"))
     k.on("client",cnt)
@@ -38,7 +38,7 @@ elif ty=="c":
     k.punching()
     def foo():
         print("对接成功辣！")
-        k.close()
+        #k.close()
     k.on("connect",foo)
     k.on("error",lambda:print("等待超时"))
 else:
