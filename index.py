@@ -66,24 +66,24 @@ class up2psocket(event_manager):
         )"""
         self._s.sendto(proto.toBytes(), address)
         # if proto.i("method")!="handshake":print(proto.i("method"))
-
+    
     def getRemoteInfo(self):
         # 获取外部地址信息以及nat类型
         try:
-            p = splup2pskt.create({"method": "getouteraddr"}, self._addr)[0]
+            p = splup2pskt.create(self._addr,getremoteinfo=True)[0]
         except timeout:
             raise up2pRequestError(
                 "Received nothing from the server ("
                 + ":".join(str(x) for x in self._addr)
                 + ") before timeout"
             )
-        self.outerAddr = p.i("outeraddress")
+        self.outerAddr = p
         if self.leapgap != None:
             return
         p = splup2pskt.create(
-            {"method": "getouteraddr"}, (self._addr[0], p.i("natport"))
+            (self._addr[0], p.i("natport")),getremoteinfo=True
         )[0]
-        self.leapgap = p.i("outeraddress")[1] - self.outerAddr[1]
+        self.leapgap = p[1] - self.outerAddr[1]
 
     def close(self):
         if self.died:
@@ -98,6 +98,7 @@ class splup2pskt:
     def __init__(self, addr, timeout=None):
         self._addr = addr
         s = socket(type=SOCK_DGRAM)
+        s.settimeout(timeout)
         s.bind(("", 0))
         self._s = s
 
@@ -119,10 +120,14 @@ class splup2pskt:
         self._s.close()
 
     @classmethod
-    def create(self, pack, addr, timeout=4):
+    def create(self, addr, pack=None, timeout=4, getremoteinfo=False):
+        gr=getremoteinfo
+        if not gr and pack==None:
+            raise up2pSocketError("parameter pack must be given in this case")
         s = splup2pskt(addr, timeout)
-        s.sendp(pack)
+        s.sendp({"method":"getouteraddr"} if gr else pack)
         tu = s.recvp()
+        if gr:tu=tu[0].i("outeraddress")
         s.close()
         return tu
 
