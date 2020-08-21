@@ -309,8 +309,8 @@ class server(up2psocket):
         self._kill_domains = dict()
         self._s.bind(self._addr)
         # ns是nat检测服务器
-        self._ns = up2psocket((self._addr[0], 0))
-        self._ns._s.bind((self._addr[0], 0))
+        self._ns = up2psocket((self._addr[0], self._addr[1]+5))
+        self._ns._s.bind((self._addr[0], self._addr[1]+5))
         self.outerAddr = self._s.getsockname()
 
         # 定时清理死亡主机
@@ -327,7 +327,6 @@ class server(up2psocket):
         nattestport = self._ns._s.getsockname()[1]
         # nat检测服务器
         def ln(p, ad):
-            print(233)
             n = self._ns
             m = p.i("method")
             if m == "getouteraddr":
